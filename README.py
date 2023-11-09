@@ -1,95 +1,168 @@
-import tkinter as tk
 import sqlite3
-class TaskManager: # criação da classe quer vai gerenciar as tarefas e vai ser responsavel pela lógica do sistema
-    def __init__(self):
-        self.conn = sqlite3.connect('tasks.db')
-        self.c = self.conn.cursor()
-        self.create_table()
+from tkinter import *
+from tkinter import messagebox
+import os
 
-    def create_table(self):
-        self.c.execute('''CREATE TABLE IF NOT EXISTS tasks
-                        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        task_name TEXT,
-                        task_description TEXT)''')
-        self.conn.commit()
+#banco de dados e tabela
+def create_database():
+    conn = sqlite3.connect('tasks.db')
+    cursor = conn.cursor()
 
-    def add_task(self, task_name, task_description):
-        self.c.execute("INSERT INTO tasks (task_name, task_description) VALUES (?, ?)",
-                       (task_name, task_description))
-        self.conn.commit()
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS tasks(
+        id INTEGER PRIMARY KEY,
+        title TEXT,
+        status TEXT
+    )
+    ''')
 
-    def get_tasks(self):
-        self.c.execute("SELECT * FROM tasks")
-        return self.c.fetchall()
+    conn.commit()
+    conn.close()
 
-    def update_task(self, task_id, task_name, task_description):
-        self.c.execute("UPDATE tasks SET task_name=?, task_description=? WHERE id=?",
-                       (task_name, task_description, task_id))
-        self.conn.commit()
+# Adicionar tarefa
+def add_task():
+    task_title = entry_task.get()
+    task_status = "Pendente"
 
-    def delete_task(self, task_id):
-        self.c.execute("DELETE FROM tasks WHERE id=?", (task_id,))
-        self.conn.commit()
+    if task_title:
+        conn = sqlite3.connect('tasks.db')
+        cursor = conn.cursor()
 
-        class TaskManagerGUI: # criação da classe responsavel pela interface gráfica
-            def __init__(self, root):
-                self.root = root
-                self.root.title("Sistema de Gerenciamento de Tarefas")
+        cursor.execute('''
+        INSERT INTO tasks (title, status) VALUES (?,?)
+        ''', (task_title, task_status))
 
-                self.task_manager = TaskManager()
+        conn.commit()
+        conn.close()
 
-                self.task_name_label = tk.Label(root, text="Nome da Tarefa:")
-                self.task_name_label.pack()
-                self.task_name_entry = tk.Entry(root)
-                self.task_name_entry.pack()
+        entry_task.delete(0, END)
+        get_tasks()
 
-                self.task_description_label = tk.Label(root, text="Descrição da Tarefa:")
-                self.task_description_label.pack()
-                self.task_description_entry = tk.Entry(root)
-                self.task_description_entry.pack()
+    else:
+        messagebox.showerror('Erro', 'Insira uma tarefa')
 
-                self.add_task_button = tk.Button(root, text="Adicionar Tarefa", command=self.add_task)
-                self.add_task_button.pack()
+#tarefas
+def get_tasks():
+    list_tasks.delete(0, END)
 
-                self.tasks_listbox = tk.Listbox(root)
-                self.tasks_listbox.pack()
+    conn = sqlite3.connect('tasks.db')
+    cursor = conn.cursor()
 
-                self.update_task_button = tk.Button(root, text="Atualizar Tarefa", command=self.update_task)
-                self.update_task_button.pack()
+    cursor.execute('''
+    SELECT * FROM tasks
+    ''')
 
-                self.delete_task_button = tk.Button(root, text="Excluir Tarefa", command=self.delete_task)
-                self.delete_task_button.pack()
+    tasks = cursor.fetchall()
 
-                self.load_tasks()
+    for task in tasks:
+        list_tasks.insert(END, f"{task[1]} - {task[2]}")
 
-            def add_task(self):
-                task_name = self.task_name_entry.get()
-                task_description = self.task_description_entry.get()
-                self.task_manager.add_task(task_name, task_description)
-                self.load_tasks()
+    conn.close()
 
-            def load_tasks(self):
-                self.tasks_listbox.delete(0, tk.END)
-                tasks = self.task_manager.get_tasks()
-                for task in tasks:
-                    self.tasks_listbox.insert(tk.END, f"{task[0]} - {task[1]}: {task[2]}")
+# Atualizar tarefa
+def update_task():
+    selected_task = list_tasks.curselection()
+    task_id = selected_task[0] + 1
 
-            def update_task(self):
-                selected_task = self.tasks_listbox.curselection()
-                if selected_task:
-                    task_id = int(self.tasks_listbox.get(selected_task)[0])
-                    task_name = self.task_name_entry.get()
-                    task_description = self.task_description_entry.get()
-                    self.task_manager.update_task(task_id, task_name, task_description)
-                    self.load_tasks()
+    conn = sqlite3.connect('tasks.db')
+    cursor = conn.cursor()
 
-            def delete_task(self):
-                selected_task = self.tasks_listbox.curselection()
-                if selected_task:
-                    task_id = int(self.tasks_listbox.get(selected_task)[0])
-                    self.task_manager.delete_task(task_id)
-                    self.load_tasks()
+    cursor.execute('''
+    UPDATE tasks SET status = ? WHERE id = ?
+    ''', ('Concluída', task_id))
 
-        root = tk.Tk()
-        app = TaskManagerGUI(root)
-        root.mainloop()
+    conn.commit()
+    conn.close()
+
+    get_tasks()
+
+# Excluir tarefa
+def delete_task():
+    selected_task = list_tasks.curselection()
+    task_id = selected_task[0] + 1
+
+    conn = sqlite3.connect('tasks.db')
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    DELETE FROM tasks WHERE id = ?
+    ''', (task_id,))
+
+    conn.commit()
+    conn.close()
+
+    get_tasks()
+
+# Salvar dados
+def save_data():
+    conn = sqlite3.connect('tasks.db')
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    SELECT * FROM tasks
+    ''')
+
+    tasks = cursor.fetchall()
+
+    with open('tasks.txt', 'w') as file:
+        for task in tasks:
+            file.write(f"{task[1]};{task[2]}\n")
+
+    conn.close()
+
+# Carregar dados
+def load_data():
+    with open('tasks.txt', 'r') as file:
+        lines = file.readlines()
+
+    conn = sqlite3.connect('tasks.db')
+    cursor = conn.cursor()
+
+    for line in lines:
+        task_title, task_status = line.strip().split(';')
+
+        cursor.execute('''
+        INSERT INTO tasks (title, status) VALUES (?,?)
+        ''', (task_title, task_status))
+
+    conn.commit()
+    conn.close()
+
+    get_tasks()
+
+# Tela principal
+
+def main_screen():
+    global window, entry_task, list_tasks, btn_add, btn_update, btn_delete, btn_save, btn_load
+
+    window = Tk()
+    window.title('Gerenciador de Tarefas')
+    window.geometry('300x300')
+    
+    entry_task = Entry(window, width=20)
+    entry_task.pack(pady=10)
+
+    btn_add = Button(window, text='Adicionar', width=20, command=add_task)
+    btn_add.pack(pady=5)
+
+    list_tasks = Listbox(window, width=50, height=15)
+    list_tasks.pack(pady=5)
+
+    btn_update = Button(window, text='Atualizar', width=20, command=update_task)
+    btn_update.pack(pady=5)
+
+    btn_delete = Button(window, text='Excluir', width=20, command=delete_task)
+    btn_delete.pack(pady=5)
+
+    btn_save = Button(window, text='Salvar', width=20, command=save_data)
+    btn_save.pack(pady=5)
+
+    btn_load = Button(window, text='Carregar', width=20, command=load_data)
+    btn_load.pack(pady=5)
+
+    get_tasks()
+
+    window.mainloop()
+
+create_database()
+main_screen()
